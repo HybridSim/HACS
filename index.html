@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HACS Industrial Hemp Scenario Dashboard</title>
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+  <style>
+    :root{
+      --gap:8px; --border:#e6e6e6; --panel:#fafafa; --ink:#111; --muted:#555;
+      --blue:#1f77b4; --red:#d62728; --orange:#ff7f0e; --green:#2d6a4f;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%; margin:0; overflow:hidden; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; color:var(--ink); background:#fff}
+    header{height:48px; padding:6px 10px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:8px}
+    h1{font-size:17px; margin:0; line-height:1.1}
+    .sub{font-size:11px; color:var(--muted); margin:1px 0 0}
+    .toolbar{display:flex; align-items:center; gap:6px; flex-wrap:nowrap; font-size:12px}
+    button,select{font-size:11px; padding:5px 7px; border:1px solid #d8d8d8; background:#fff; border-radius:7px; cursor:pointer; font-weight:700; box-shadow:0 1px 1px rgba(0,0,0,.03)}
+    button.primary{background:var(--green); border-color:var(--green); color:#fff}
+    button:disabled{opacity:.5; cursor:default}
+    .app{height:calc(100vh - 48px); display:grid; grid-template-columns:300px minmax(0,1fr); gap:8px; padding:8px; overflow:hidden}
+    .side{border:1px solid var(--border); border-radius:10px; padding:7px; background:#fff; overflow:hidden; display:flex; flex-direction:column; gap:6px}
+    .side h2{font-size:12px; margin:0 0 2px; line-height:1.1}
+    .presetGrid{display:grid; grid-template-columns:1fr 1fr; gap:5px}
+    .presetGrid button{padding:5px 4px; min-height:28px; line-height:1.05}
+    .control{background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:5px 6px; min-height:46px}
+    .control label{display:flex; justify-content:space-between; gap:5px; font-size:10.5px; font-weight:800; margin-bottom:1px; line-height:1.15}
+    .control .val{font-size:10.5px; color:#333; font-variant-numeric:tabular-nums; white-space:nowrap; font-weight:700}
+    input[type=range]{width:100%; height:16px; margin:0}
+    .tinyNote{font-size:10.5px; line-height:1.25; color:#555; border-top:1px solid #eee; padding-top:5px}
+    .metrics{display:grid; grid-template-columns:1fr 1fr; gap:5px}
+    .metric{border:1px solid var(--border); border-radius:8px; padding:5px 6px; background:#fff}
+    .metric .k{font-size:10px; color:#555; line-height:1.05}
+    .metric .v{font-size:13px; font-weight:900; font-variant-numeric:tabular-nums; line-height:1.1; margin-top:2px}
+    .main{display:grid; grid-template-rows:auto 1fr; gap:6px; overflow:hidden}
+    .legendBar{font-size:11px; color:#444; display:flex; justify-content:space-between; gap:8px; align-items:center; min-height:20px; white-space:nowrap; overflow:hidden}
+    .legendItems{display:flex; gap:14px; flex-wrap:nowrap; overflow:hidden}
+    .sw{display:inline-block; width:11px; height:3px; vertical-align:middle; margin-right:5px}
+    .red{background:var(--red)} .blue{background:var(--blue)} .orange{background:var(--orange)} .green{background:var(--green)}
+    .plots{display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:8px; min-height:0; overflow:hidden}
+    .plotcard{border:1px solid var(--border); border-radius:10px; background:#fff; min-height:0; overflow:hidden; display:flex; flex-direction:column}
+    .plotTitle{font-size:12px; font-weight:900; padding:6px 8px 0; line-height:1.1; min-height:22px}
+    .plotbox{flex:1; min-height:0}
+    details{display:none}
+    @media(max-width:900px){
+      html,body{overflow:auto}
+      .app{height:auto; display:block; overflow:visible}
+      .side{margin-bottom:8px; overflow:visible}
+      .plots{grid-template-columns:1fr; grid-template-rows:none}
+      .plotcard{height:260px; margin-bottom:8px}
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>HACS Industrial Hemp Scenario Dashboard</h1>
+    <div class="sub">BAU, crop-treatment, processing, investor, tillage expansion and CO₂ accounting module</div>
+  </div>
+  <div class="toolbar">
+    <label for="endYear"><strong>End</strong></label>
+    <select id="endYear"></select>
+    <button id="run" class="primary">▶ Run</button>
+    <button id="reset">⟲ Reset/Clear</button>
+    <button id="downloadCsv">CSV</button>
+  </div>
+</header>
+
+<div class="app">
+  <aside class="side">
+    <h2>Presets</h2>
+    <div class="presetGrid">
+      <button data-preset="bau">BAU</button>
+      <button data-preset="crop150">Crop + 150 ha</button>
+      <button data-preset="investor2400">Investor 2,400 ha</button>
+      <button data-preset="gov100k">Gov tillage</button>
+    </div>
+
+    <h2>Sliders</h2>
+    <div class="control"><label>Licensing restriction <span class="val"><span id="licensingVal">0</span> <span id="licensingText">crop</span></span></label><input id="licensing" type="range" min="0" max="1" step="1" value="0"></div>
+    <div class="control"><label>Processing capacity <span class="val"><span id="processingCapacityVal">100,000</span> ha/yr</span></label><input id="processingCapacity" type="range" min="150" max="100000" step="50" value="100000"></div>
+    <div class="control"><label>Available land pool <span class="val"><span id="availableLandVal">100,000</span> ha</span></label><input id="availableLand" type="range" min="547" max="100000" step="50" value="100000"></div>
+    <div class="control"><label>Economic incentives <span class="val"><span id="econIncentivesVal">0.25</span>/yr</span></label><input id="econIncentives" type="range" min="0.05" max="0.65" step="0.01" value="0.25"></div>
+    <div class="control"><label>Abandonment rate <span class="val"><span id="abandonRateVal">0.12</span>/yr</span></label><input id="abandonRate" type="range" min="0.02" max="0.30" step="0.01" value="0.12"></div>
+    <div class="control"><label>Normal land requirement <span class="val"><span id="normalLandReqVal">0.695</span>/yr</span></label><input id="normalLandReq" type="range" min="0.10" max="1.20" step="0.005" value="0.695"></div>
+    <div class="control"><label>CO₂ sequestration rate <span class="val"><span id="seqRateVal">10</span> t/ha/yr</span></label><input id="seqRate" type="range" min="5" max="20" step="1" value="10"></div>
+    <div class="control"><label>Desired CO₂ goal <span class="val"><span id="desiredGoalVal">1,000,000</span> t</span></label><input id="desiredGoal" type="range" min="100000" max="5000000" step="100000" value="1000000"></div>
+
+    <div class="metrics">
+      <div class="metric"><div class="k">Final ha</div><div class="v" id="mFinalHemp">—</div></div>
+      <div class="metric"><div class="k">Peak ha</div><div class="v" id="mPeakHemp">—</div></div>
+      <div class="metric"><div class="k">CO₂ stock</div><div class="v" id="mCO2">—</div></div>
+      <div class="metric"><div class="k">Gap to goal</div><div class="v" id="mDisc">—</div></div>
+    </div>
+    <div class="tinyNote">100,000 ha is a wider tillage land-pool scenario, not an assumption that all land is used for hemp. CO₂ is indicative gross sequestration.</div>
+  </aside>
+
+  <main class="main">
+    <div class="legendBar">
+      <div class="legendItems">
+        <span><span class="sw red"></span>Historical</span>
+        <span><span class="sw blue"></span>Scenario</span>
+        <span><span class="sw orange"></span>Constraint/rate</span>
+        <span><span class="sw green"></span>CO₂ target gap</span>
+      </div>
+      <span id="status">Press Run to animate projection.</span>
+    </div>
+    <div class="plots">
+      <div class="plotcard"><div class="plotTitle">Total Hectares of Hemp Farmed</div><div id="hempPlot" class="plotbox"></div></div>
+      <div class="plotcard"><div class="plotTitle">CO₂ Sequestered by Hemp</div><div id="co2Plot" class="plotbox"></div></div>
+      <div class="plotcard"><div class="plotTitle">Potential Land and CO₂ Discrepancy</div><div id="landDiscPlot" class="plotbox"></div></div>
+      <div class="plotcard"><div class="plotTitle">New Hectares, Abandonment and Processing Effect</div><div id="ratesPlot" class="plotbox"></div></div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  const HIST_YEARS=[2017,2018,2019,2020,2021,2022,2023,2024];
+  const HIST_HEMP=[76,230,547,362,251,163,114,114];
+  const START_YEAR=2024;
+  const DEFAULTS={END_YEAR:2050,licensing:0,processingCapacity:100000,availableLand:100000,econIncentives:0.25,abandonRate:0.12,normalLandReq:0.695,seqRate:10,desiredGoal:1000000};
+  const PRESETS={
+    bau:{licensing:1,processingCapacity:150,availableLand:547,econIncentives:0.65,abandonRate:0.12,normalLandReq:0.695,seqRate:10,desiredGoal:1000000},
+    crop150:{licensing:0,processingCapacity:150,availableLand:547,econIncentives:0.65,abandonRate:0.12,normalLandReq:0.695,seqRate:10,desiredGoal:1000000},
+    investor2400:{licensing:0,processingCapacity:2400,availableLand:2400,econIncentives:0.25,abandonRate:0.12,normalLandReq:0.695,seqRate:10,desiredGoal:1000000},
+    gov100k:{licensing:0,processingCapacity:100000,availableLand:100000,econIncentives:0.25,abandonRate:0.12,normalLandReq:0.695,seqRate:10,desiredGoal:1000000}
+  };
+  let params={...DEFAULTS}, latest=null, timer=null, frame=0, animated=null;
+  const $=id=>document.getElementById(id);
+  const fmt0=x=>Math.round(x).toLocaleString();
+  const fmt2=x=>Number(x).toFixed(2);
+  const cfg={responsive:true, displaylogo:false, modeBarButtonsToRemove:["select2d","lasso2d","autoScale2d"]};
+
+  function populateEndYear(){
+    for(let y=2030;y<=2050;y++){const opt=document.createElement("option"); opt.value=y; opt.textContent=y; $("endYear").appendChild(opt);} $("endYear").value=DEFAULTS.END_YEAR;
+  }
+  function readSliders(){
+    params.END_YEAR=parseInt($("endYear").value,10);
+    ["licensing","processingCapacity","availableLand","econIncentives","abandonRate","normalLandReq","seqRate","desiredGoal"].forEach(id=>{params[id]=parseFloat($(id).value);});
+    params.licensing=parseInt(params.licensing,10);
+  }
+  function writeSliders(){
+    $("endYear").value=params.END_YEAR;
+    ["licensing","processingCapacity","availableLand","econIncentives","abandonRate","normalLandReq","seqRate","desiredGoal"].forEach(id=>{$(id).value=params[id];});
+    updateLabels();
+  }
+  function updateLabels(){
+    $("licensingVal").textContent=params.licensing; $("licensingText").textContent=params.licensing===0?"crop":"BAU";
+    $("processingCapacityVal").textContent=fmt0(params.processingCapacity);
+    $("availableLandVal").textContent=fmt0(params.availableLand);
+    $("econIncentivesVal").textContent=fmt2(params.econIncentives);
+    $("abandonRateVal").textContent=fmt2(params.abandonRate);
+    $("normalLandReqVal").textContent=Number(params.normalLandReq).toFixed(3);
+    $("seqRateVal").textContent=fmt0(params.seqRate);
+    $("desiredGoalVal").textContent=fmt0(params.desiredGoal);
+  }
+  function simulate(){
+    const years=[], hemp=[], potentialLand=[], co2=[], discrepancy=[], newRate=[], abandonRateArr=[], landUseArr=[], processingEffectArr=[], profitabilityArr=[];
+    let totalH=114, landPool=Math.max(1,params.availableLand), potential=landPool, co2Stock=0;
+    for(let y=START_YEAR;y<=params.END_YEAR;y++){
+      const effectResource=Math.max(0,potential/landPool);
+      const landReq=params.normalLandReq*effectResource;
+      const hempLandUse=totalH*landReq;
+      const processingEffect=Math.min(1,params.processingCapacity/Math.max(1,hempLandUse));
+      const policySupport=1+0.25*(1-params.licensing);
+      const rawNew=params.econIncentives*policySupport*processingEffect*totalH;
+      const rNew=Math.min(Math.max(0,rawNew),Math.max(0,potential));
+      const profitability=Math.max(0,potential/landPool);
+      const lossFraction=params.abandonRate*(1/Math.max(0.1,profitability));
+      const rAbandon=lossFraction*totalH;
+      const rCO2=totalH*params.seqRate;
+      years.push(y); hemp.push(totalH); potentialLand.push(potential); co2.push(co2Stock); discrepancy.push(params.desiredGoal-co2Stock);
+      newRate.push(rNew); abandonRateArr.push(rAbandon); landUseArr.push(hempLandUse); processingEffectArr.push(processingEffect); profitabilityArr.push(profitability);
+      totalH=Math.max(0,totalH+rNew-rAbandon); potential=Math.max(0,potential-hempLandUse); co2Stock=Math.max(0,co2Stock+rCO2);
+    }
+    return {years,hemp,potentialLand,co2,discrepancy,newRate,abandonRateArr,landUseArr,processingEffectArr,profitabilityArr};
+  }
+  function range(arrs){
+    const flat=arrs.flat().filter(Number.isFinite); if(!flat.length) return [0,1]; const min=Math.min(...flat), max=Math.max(...flat), pad=(max-min)*.07||1; return [Math.min(0,min-pad),max+pad];
+  }
+  function commonLayout(yTitle,x0=2017, yRange=null){
+    return {margin:{l:46,r:12,t:4,b:32}, height:null, autosize:true, xaxis:{title:{text:"Year",font:{size:10}}, tickfont:{size:10}, range:[x0,params.END_YEAR], automargin:true}, yaxis:{title:{text:yTitle,font:{size:10}}, tickfont:{size:10}, automargin:true, range:yRange||undefined}, showlegend:false, hovermode:"x unified"};
+  }
+  function blankPlots(){
+    const empty={x:[],y:[],mode:"lines",line:{color:"#1f77b4",width:2}};
+    Plotly.newPlot("hempPlot",[{x:HIST_YEARS,y:HIST_HEMP,mode:"lines+markers",line:{color:"#d62728",width:2},marker:{size:4}},empty],commonLayout("Hectares",2017,range([HIST_HEMP])),cfg);
+    Plotly.newPlot("co2Plot",[empty,{x:[],y:[],mode:"lines",line:{color:"#d62728",width:1,dash:"dot"}}],commonLayout("Tonnes CO₂",2024,[0,params.desiredGoal*1.05]),cfg);
+    Plotly.newPlot("landDiscPlot",[{x:[],y:[],mode:"lines",line:{color:"#ff7f0e",width:2}},{x:[],y:[],mode:"lines",yaxis:"y2",line:{color:"#2d6a4f",width:2}}],dualLayout("Hectares","Tonnes CO₂"),cfg);
+    Plotly.newPlot("ratesPlot",[{x:[],y:[],mode:"lines",line:{color:"#1f77b4",width:2}},{x:[],y:[],mode:"lines",line:{color:"#d62728",width:2}},{x:[],y:[],mode:"lines",yaxis:"y2",line:{color:"#ff7f0e",width:2}}],dualLayout("Hectares/year","Dmnl",[0,1.05]),cfg);
+  }
+  function dualLayout(leftTitle,rightTitle,rightRange=null){
+    return {margin:{l:46,r:46,t:4,b:32}, height:null, autosize:true, xaxis:{title:{text:"Year",font:{size:10}}, tickfont:{size:10}, range:[2024,params.END_YEAR], automargin:true}, yaxis:{title:{text:leftTitle,font:{size:10}},tickfont:{size:10},automargin:true}, yaxis2:{title:{text:rightTitle,font:{size:10}},tickfont:{size:10},overlaying:"y",side:"right",range:rightRange||undefined,automargin:true}, showlegend:false, hovermode:"x unified"};
+  }
+  function updateMetrics(data,i){
+    if(!data || i<0){$("mFinalHemp").textContent="—";$("mPeakHemp").textContent="—";$("mCO2").textContent="—";$("mDisc").textContent="—";return;}
+    const h=data.hemp.slice(0,i+1), c=data.co2[i], d=data.discrepancy[i];
+    $("mFinalHemp").textContent=fmt0(data.hemp[i])+" ha"; $("mPeakHemp").textContent=fmt0(Math.max(...h))+" ha"; $("mCO2").textContent=fmt0(c)+" t"; $("mDisc").textContent=fmt0(d)+" t";
+  }
+  function drawFrame(i){
+    const d=animated, yrs=d.years.slice(0,i+1);
+    Plotly.react("hempPlot",[
+      {x:HIST_YEARS,y:HIST_HEMP,mode:"lines+markers",line:{color:"#d62728",width:2},marker:{size:4}},
+      {x:yrs,y:d.hemp.slice(0,i+1),mode:"lines",line:{color:"#1f77b4",width:3}}
+    ],commonLayout("Hectares",2017,range([HIST_HEMP,d.hemp])),cfg);
+    Plotly.react("co2Plot",[
+      {x:yrs,y:d.co2.slice(0,i+1),mode:"lines",line:{color:"#1f77b4",width:3}},
+      {x:yrs,y:yrs.map(()=>params.desiredGoal),mode:"lines",line:{color:"#d62728",width:1,dash:"dot"}}
+    ],commonLayout("Tonnes CO₂",2024,range([d.co2,yrs.map(()=>params.desiredGoal)])),cfg);
+    Plotly.react("landDiscPlot",[
+      {x:yrs,y:d.potentialLand.slice(0,i+1),mode:"lines",line:{color:"#ff7f0e",width:3}},
+      {x:yrs,y:d.discrepancy.slice(0,i+1),mode:"lines",yaxis:"y2",line:{color:"#2d6a4f",width:2}}
+    ],dualLayout("Hectares","Tonnes CO₂"),cfg);
+    Plotly.react("ratesPlot",[
+      {x:yrs,y:d.newRate.slice(0,i+1),mode:"lines",line:{color:"#1f77b4",width:3}},
+      {x:yrs,y:d.abandonRateArr.slice(0,i+1),mode:"lines",line:{color:"#d62728",width:2}},
+      {x:yrs,y:d.processingEffectArr.slice(0,i+1),mode:"lines",yaxis:"y2",line:{color:"#ff7f0e",width:2}}
+    ],dualLayout("Hectares/year","Dmnl",[0,1.05]),cfg);
+    updateMetrics(d,i); $("status").textContent="Projection year: "+d.years[i];
+  }
+  function run(){
+    clearInterval(timer); readSliders(); updateLabels(); animated=simulate(); latest=animated; frame=0; drawFrame(frame);
+    timer=setInterval(()=>{frame++; if(frame>=animated.years.length){clearInterval(timer); timer=null; $("status").textContent="Run complete: "+params.END_YEAR; return;} drawFrame(frame);},90);
+  }
+  function reset(){
+    clearInterval(timer); timer=null; params={...DEFAULTS}; writeSliders(); latest=null; animated=null; frame=0; updateMetrics(null,-1); blankPlots(); $("status").textContent="Cleared. Press Run to animate projection.";
+  }
+  function setPreset(name){params={...params,...PRESETS[name]}; writeSliders(); blankPlots(); updateMetrics(null,-1); $("status").textContent="Preset loaded. Press Run.";}
+  function downloadCsv(){
+    const d=latest||simulate(); const header=["Year","Total Hectares of Hemp Farmed","Potential Land for Hemp Farming","CO2 Sequestered by Hemp","Discrepancy","rate of new hectares farmed","rate of land abandoned","hemp land use","processing capacity effect","profitability"];
+    const rows=d.years.map((y,i)=>[y,d.hemp[i],d.potentialLand[i],d.co2[i],d.discrepancy[i],d.newRate[i],d.abandonRateArr[i],d.landUseArr[i],d.processingEffectArr[i],d.profitabilityArr[i]]);
+    const csv=[header,...rows].map(r=>r.join(",")).join("\n"); const blob=new Blob([csv],{type:"text/csv"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="hacs_dashboard_results.csv"; a.click(); URL.revokeObjectURL(url);
+  }
+  function bind(){
+    ["licensing","processingCapacity","availableLand","econIncentives","abandonRate","normalLandReq","seqRate","desiredGoal"].forEach(id=>{$(id).addEventListener("input",()=>{readSliders();updateLabels();});});
+    $("endYear").addEventListener("change",()=>{readSliders(); blankPlots(); updateMetrics(null,-1);});
+    $("run").addEventListener("click",run); $("reset").addEventListener("click",reset); $("downloadCsv").addEventListener("click",downloadCsv);
+    document.querySelectorAll("[data-preset]").forEach(b=>b.addEventListener("click",()=>setPreset(b.dataset.preset)));
+  }
+  populateEndYear(); writeSliders(); bind(); blankPlots();
+})();
+</script>
+</body>
+</html>
